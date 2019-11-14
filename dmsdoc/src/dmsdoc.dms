@@ -1,0 +1,215 @@
+// Copyright 23-Sept-2019 ºDeme
+// GNU General Public License - V3 <http://www.gnu.org/licenses/>
+
+"201909" : version =
+
+(
+  "dmsdoc v. " version ".\n" + +
+  "Copyright 23-Sept-2019 ºDeme\n" +
+  "GNU General Public License - V3 <http://www.gnu.org/licenses/>\n" +
+  "---- \n" +
+  "Use:\n" +
+  "  dmstack dmsdoc -- <file>\n" +
+  "For example:\n" +
+  "  dmstack dmsdoc -- myFile\n" +
+  "or\n" +
+  "  dmstack dmsdoc -- myFile.dms\n" + sys,error
+) msg =>
+
+"CODE" wrap,ref : State =
+"=Overview" wrap,ref : Key =
+0 wrap,ref : KeyLine =
+{} data Doc =
+[] data LastDoc =
+0 wrap,ref Nline =
+
+// Code ----------------------------------------
+
+( lst,unary I =; line =
+  [1] data More =
+
+  (
+    I >> ix =
+    line "\"" ix str,indexFrom qi =
+    line "//" ix str,indexFrom c1i =
+    line "/*" ix str,indexFrom c2i =
+
+    "" -1
+    (pop pop "\"" qi) (qi -1 !=) if
+    (dup i = (pop pop "//" c1i) (i -1 == : c1i i < : ||) if) (c1i -1 !=) if
+    (dup i = (pop pop "/*" c2i) (i -1 == : c2i i < : ||) if) (c2i -1 !=) if
+    i =; op =
+
+    (
+      line symbol
+      More 0 <<
+    )
+    else
+    (
+      State "COM" <<
+      line i 2 + commentary more =; i =;
+      More more <<;
+      I i <<;
+    )
+    (op "/*" ==)
+    elif
+    (More 0 <<)
+    (op "//" ==)
+    elif
+    (
+      line i 1 + quotes more =; i =;
+      More more <<;
+      I i <<;
+    )
+    (op "\"" ==)
+    if
+  )
+  (More 0 get) while
+) code =>
+
+// Documentation -------------------------------
+
+( line =
+  LastDoc : line : (4) else (3) (line size 3 ==) if : str,right : lst,push
+  State "DOC" <<
+) startDoc =>
+
+( line =
+  (line endDoc)
+  else
+  (LastDoc : line : (4) else (3) (line size 3 ==) if : str,right : lst,push)
+  (l "///" str,starts?)
+  if
+) docContinuation =>
+
+( line =
+  (
+    Doc
+      Key >>
+      obj,new
+        "line"  KeyLine >> obj,put+
+        "text" LastDoc "\n" str,join obj,put+
+      map,put
+  )
+  ( Key size)
+  if
+  Key lst,clear
+  LastDoc lst,clear
+  State "CODE" <<
+  line 0 code
+) endDoc =>
+
+// String --------------------------------------
+
+( ix =; line =
+  line "\"" ix str,indexFrom lst,unary QIx =
+  line "\\\"" ix str,indexFrom lst,unary EscIx =
+
+  (
+    EscIx >> 2 + ix =
+    QIx : line "\"" ix str,indexFrom : <<
+    EscIx : line "\\\"" ix str,indexFrom : <<
+  )
+  (
+    QIx >> qIx =; EscIx >> escIx =
+    (1) else (0) (qIx -1 == escIx -1 == || qIx escIx < ||) if
+  )
+  while
+  QIx >> qIx =
+  (qIx 1 +; 1) else (0 0)(qIx -1 ==) if
+) quotes =>
+
+// Symbol --------------------------------------
+
+( ":" " " str,replace
+  "," " " str,replace
+  ";" " " str,replace
+  ")" " " str,replace
+  str,trim
+  line =
+
+  ( Key lst,clear)
+  else
+  (
+    line -2 str,left str,trim l =
+    l " " str,lastIndex i =
+    (l i 1 + str,right) else (l) (i -1 ==) if sym =
+
+    (Key lst,clear)
+    else
+    (
+      (Key sym lst,push) else (Key sym <<) (Key size) if
+      KeyLine : Nline >> : <<
+    )
+    (sym "" !=)
+    if
+  )
+  ( line "=>" str,ends?) if
+) symbol =>
+
+// Commentary -----------------------------
+
+( ix =; line =
+  line "*/" ix str,indexFrom ix =
+
+  (State "CODE" <<; ix 2 +; 1) else
+  (0 0) (ix -1 ==) if
+) commentary =>
+
+// Start ---------------------------------------------------------------------
+
+(msg; 0 sys,exit) (sys,args size 1 !=) if
+
+sys,args 0 get
+(".dms" +) (dup ".dms" str,ends? !) if
+f =
+
+("'" f + "' not found\n====================\n" + sys,error; msg; 0 sys,exit)
+(f file,exists? !)
+if
+
+"" wrap,ref Line =
+f file,ropen : F =
+(
+  Line >> str,trim : l =
+  State >> : st =
+
+  (l endDoc)
+  (st "DOC" ==)
+  elif
+  (
+    (l docContinuation)
+    else // DOC
+    (
+      l 0 commentary
+      ix =; more =
+      (State "CODE" <<; l; ix 2 + code) (more) if
+    )
+    (st "COM" ==)
+    elif
+    (
+      (l 0 code)
+      else
+      (l startDoc)
+      (l "///" str,starts?)
+      if
+      empty? assert
+    )
+    (st "CODE" ==)
+    if
+  )
+  (l "" !=) if
+)
+(
+  Line : F file,readLine : <<
+  Nline (++) ^^
+  Line >> "" !=
+) while
+
+F file,close
+
+Doc (
+  "line" (js,wi) obj,up+
+  "text" (js,ws) obj,up+
+  js,wo
+) map,toJs sys,println
